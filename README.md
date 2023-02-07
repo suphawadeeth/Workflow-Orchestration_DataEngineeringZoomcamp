@@ -64,192 +64,176 @@ conda create -n zoom python=3.9
 ## Preparing Environment
 
 - prepare ```requirements.txt``` file in your working directory
-- This ```requirements.txt``` contains tools you need to work on this project.
-		```
+- 
+- This ```requirements.txt``` contains tools you need to work on this project:
+
+		``` 
+		
 		pandas==1.5.2
+		
 		prefect==2.7.7
+		
 		prefect-sqlalchemy==0.2.2
+		
 		prefect-gcp[cloud_storage]==0.2.4
+		
 		protobuf==4.21.11
+		
 		pyarrow==10.0.1
+		
 		pandas-gbq==0.18.1
+		
 		psycopg2-binary==2.9.5
+		
 		sqlalchemy==1.4.46
-		```
+		
+		``` 
 
 - run
 
-``` pip install -r requirement.txt
+```
+pip install -r requirement.txt
 ``` 
 
 - Note: if you have already installed all other tools, you might just need to install Prefect.
 
-- To install Prefect, run  ```pip install prefect -U``` 
+- To install Prefect, run  
+```
+pip install prefect -U
+``` 
 
 After preparing environment, we'll start digest data
-- create file ---> ingest_data.py in your working directory Or download a script here ---> https://github.com/discdiver/prefect-zoomcamp
-- Adjust parameters to fit your environment, especially in the "main" function area. All parameter must be matched to your network/host environment.
+
+## Digest Data
+
+- create file ---> ```ingest_data.py``` in your working directory Or download a script here ---> https://github.com/discdiver/prefect-zoomcamp
+
+
+- Adjust parameters to fit your environment, especially in the "**main**" function area. All parameter must be matched to your network/host environment.
+
+
 - Then **make sure you're put up your network & connected to host server, and have database created**.
+
+
 - Then in "zoom" enviroment (or your conda environment), run
 
 ```
 python ingest_data.py
 ```
 
-- Now, you must have table presented in your database already! 
+- Now, you must have data table created in your database already! 
+
+
 	- You can quickly check through pgcli environment, 
+
+
 		- type ```\dt``` <-- you'll see that the table's created
+
+
 		- type ```SELECT count(1) FROM xx[your table name]xx``` <-- to check if all data is ingested in the table
+
+
 	- Or go check on pgAdmin localhost:8080, on server > host name > database > schema > table > view your data
 
+- Next we will create Prefect Flow
+
 ## Create Flow with Python
-Create ingest_data_flow.py
+Create ```ingest_data_flow.py``` 
 
 
 ```
 #!/usr/bin/env python
-
 # coding: utf-8
 
 import os
-
 import argparse
-
 from time import time
-
 import pandas as pd
-
 from sqlalchemy import create_engine
-
 from prefect import flow, task
-
   
 
 @task(log_prints=True, tags=["extract"])
-
 def extract_data(url: str):
+	# the backup files are gzipped, and it's important to keep the correct extension
+	# for pandas to be able to open the file
+	if url.endswith('.csv.gz'):
+	csv_name = 'yellow_tripdata_2021-01.csv.gz'
+	else:
+	csv_name = 'output.csv'
+	os.system(f"wget {url} -O {csv_name}")
 
-# the backup files are gzipped, and it's important to keep the correct extension
 
-# for pandas to be able to open the file
-
-if url.endswith('.csv.gz'):
-
-csv_name = 'yellow_tripdata_2021-01.csv.gz'
-
-else:
-
-csv_name = 'output.csv'
+	df_iter = pd.read_csv(csv_name, iterator=True, chunksize=100000)
 
   
+	df = next(df_iter)
 
-os.system(f"wget {url} -O {csv_name}")
+	df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
 
-  
+	df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
 
-df_iter = pd.read_csv(csv_name, iterator=True, chunksize=100000)
-
-  
-
-df = next(df_iter)
-
-  
-
-df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
-
-df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
-
-  
-
-return df
+	return df
 
   
 
 # next task is to remove passenger that = 0
 
 @task(log_prints=True)
-
 def transform_data(data):
-
-print(f"pre: missing passenger count: {df['passenger_count'].isin([0]).sum()}")
-
-df = df[df['passenger_count'] != 0]
-
-print(f"post: missing passenger count: {df['passenger_count'].isin([0]).sum()}")
-
-return df
+	print(f"pre: missing passenger count: {df['passenger_count'].isin([0]).sum()}")
+	df = df[df['passenger_count'] != 0]
+	print(f"post: missing passenger count: {df['passenger_count'].isin([0]).sum()}")
+	return df
 
   
 
 @task(log_prints=True, retries=3)
-
 def load_data(user, password, host, port, db, table_name, df):
+	postgres_url = f'postgresql://{user}:{password}@{host}:{port}/{db}'
+	engine = create_engine(postgres_url)
 
-postgres_url = f'postgresql://{user}:{password}@{host}:{port}/{db}'
+	df.head(n=0).to_sql(name=table_name, con=engine, if_exists='replace')
 
-engine = create_engine(postgres_url)
-
-  
-
-df.head(n=0).to_sql(name=table_name, con=engine, if_exists='replace')
-
-  
-
-df.to_sql(name=table_name, con=engine, if_exists='append')
+	df.to_sql(name=table_name, con=engine, if_exists='append')
 
   
 
 # A flow can also call another flow (= add subflow into the flow)
-
 @flow(name="Subflow", log_prints=True)
-
 def log_subflow(table_name: str):
-
-print(f"Loggin Subflow for: {table_name}")
+	print(f"Loggin Subflow for: {table_name}")
 
   
 
 @flow(name="Ingest Data")
-
 def main_flow(table_name: str = "yellow_taxi_trips"):
-
-user = "xxx"
-
-password = "xxx"
-
-host = "xxx"
-
-port = "xxx"
-
-db = "ny_taxi"
-
-csv_url = "https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow/yellow_tripdata_2021-01.csv.gz"
-
-  
-
-log_subflow(table_name)
-
-raw_data = extract_data(csv_url)
-
-data = transform_data(raw_data)
-
-load_data(user, password, host, port, db, table_name, data)
-
-  
-  
+	user = "xxx"
+	password = "xxx"
+	host = "xxx"
+	port = "xxx"
+	db = "ny_taxi"
+	csv_url = "https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow/yellow_tripdata_2021-01.csv.gz"
+	
+	log_subflow(table_name)
+	raw_data = extract_data(csv_url)
+	data = transform_data(raw_data)
+	load_data(user, password, host, port, db, table_name, data)
 
 if __name__ == '__main__':
-
-main_flow(table_name = "yellow_trips")
+	main_flow(table_name = "yellow_trips")
 
 ```
 
 - Adjust detail to fit your environment
+
 - Then run 
 
 ```
 python ingest_data_flow.py
 ```
+
+- Next, to see your flow runs 👇
 
 ## Visualize Your Flow Runs
 
@@ -264,72 +248,90 @@ prefect orion start
 ```
 
 - You're now on orion server 
-- On the console, you'll see "prefect config"
+
+
+- On the console, you'll see "prefect config set PREFECT_API_URL=http://...." with server 
+
+
 - Copy it and run it on another Terminal (in conda environment)
+
+
 - Now visit the dashboard on Prefect server by clicking the link on Prefect orion or past the Prefect APIs Url on the console to your browser. 
 
-You'll see all the flow runs.
+- You can now see all the flow runs.
+
+- Next we will learn to create Prefect Block
 
 ## Create Prefect Block
 
 ### What is Prefect Blocks & Why do we need them?
+
 - Block will keep your code, config that you have created and you can reuse them anytime
-- Paste this to your ingest_data_flow.py script
+
+- On orion server, click Block select **SQLAlchemy Connector**
+
+- Click add, setup 
+
+	Block name: postgres-connector
+
+	Driver: postgresql+psycopg2
+
+	Database: ny_taxi
+
+	Username: postgres
+
+	Host: localhost
+
+	Port: 5433 (port that you use)
+
+	Click create
+
+
+- Paste this script to your ingest_data_flow.py file 👇
+
+
 ```
 from prefect_sqlalchemy import SqlAlchemyConnector
 
 with SqlAlchemyConnector.load("postgres-connector") as database_block:
 ```
 
--   Prefect flow
-
-
--   Creating an ETL
-
-
--   Prefect task
-
-
--   Blocks and collections
-
-Give block name: postgres-connector
-
-Driver: postgresql+psycopg2
-
-Database: ny_taxi
-
-Username: postgres
-
-Host: localhost
-
-Port:5431
-
-Click create
-
-Once you have preset code: put it into your ingest_data_flow.py
-
--   Orion UI
 
 🎥 [Video](https://www.youtube.com/watch?v=jAwRCyGLKOY&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=17)
 
-### [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#3-etl-with-gcp--prefect)3. ETL with GCP & Prefect
+## [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#3-etl-with-gcp--prefect)3. ETL with GCP & Prefect
 
 # Export Load and Transform (ETL) with GCP & Prefect
 
--   Flow 1: Putting data to Google Cloud Storage
+Putting data to Google Cloud Storage
 
 🎥 [Video](https://www.youtube.com/watch?v=W-rMz_2GwqQ&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=18)
 
-### Preparing GCP
+## Preparing GCP
 - Setup your gcloud account https://cloud.google.com/
+
+
 - Create project, select project
+
+
 - Go to Cloud Storage > Buckets, setup your Bucket "prefect_de_zoom"
+
+
 - Next, go to IAM & Admin to create service account
+
+
 - Setup Service Account, set role as BigQuery Admin, Storage Admin > done
+
+
 - Select you Service Account > select keys on the top menu bar > clicke key > create new key > select JSON > create
+
+
 - Download that file into your safe folder. (We'll need it to setup Block later on)
 
-### Setup Environment for Prefect Flow
+
+- Next we will transform csv to parquet and upload it to gcloud
+
+## Setup Environment for Prefect Flow
 - Make sure you're in your environment 
 
 ```
@@ -343,10 +345,20 @@ prefect orion start
 ```
 
 - Then we will create Gcloud Block on Prefect
+
+
 	- On Terminal (zoom environment), call  ```prefect block register -m prefect_gcp```
+
+
 	- On prefect orion dashboard, go to Block > Add+ GCS Bucket, then setup
+
+
 		- Block name: zoom-gcs
+
+
 		- Bucket name: prefect_de_zoom xx(should be matched with your gcloud bucket)xx
+
+
 		- GCP Credentials > add > 
 			- Block name: zoom-gcs-creds 
 			- Service Account info: place the code in your JSON file that you've just downloaded from setting up GCP Service Account > click create
