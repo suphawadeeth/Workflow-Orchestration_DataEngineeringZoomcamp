@@ -299,9 +299,9 @@ with SqlAlchemyConnector.load("postgres-connector") as database_block:
 
 🎥 [Video](https://www.youtube.com/watch?v=jAwRCyGLKOY&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=17)
 
-## [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#3-etl-with-gcp--prefect)3. ETL with GCP & Prefect
+# [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#3-etl-with-gcp--prefect)3. ETL with GCP & Prefect
 
-# Export Load and Transform (ETL) with GCP & Prefect
+## Export Load and Transform (ETL) with GCP & Prefect
 
 ## Flow 1: Putting data to Google Cloud Storage
 
@@ -459,7 +459,7 @@ if __name__ == "__main__":
 
 
 
-## [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#4-from-google-cloud-storage-to-big-query)4. From Google Cloud Storage to Big Query
+# [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#4-from-google-cloud-storage-to-big-query)4. From Google Cloud Storage to Big Query
 
 ## Flow 2: From GCS to BigQuery
 
@@ -546,7 +546,7 @@ if __name__ == "__main__":
 - After execute the ```etl_gcs_to_bq.py``` 
 	- Go check the table on gcloud, use query tool to acquire data
 
-## [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#5-parametrizing-flow--deployments)5. Parametrizing Flow & Deployments
+# [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#5-parametrizing-flow--deployments)5. Parametrizing Flow & Deployments
 
 
 ## Add Parameterization to Prefect Flow
@@ -669,7 +669,7 @@ prefect agent start --work-queue "default"
 🎥 [Video](https://www.youtube.com/watch?v=QrDxPjX10iw&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=20)
 
 
-## [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#6-schedules--docker-storage-with-infrastructure)6. Schedules & Docker Storage with Infrastructure
+# [](https://github.com/suphawadeeth/data-engineering-zoomcamp/tree/main/week_2_workflow_orchestration#6-schedules--docker-storage-with-infrastructure)6. Schedules & Docker Storage with Infrastructure
 
 - In the last session, we learned that Deployment in Prefect allow you to schedule your flow runs via APIs and we create a deployment with CLI.
 
